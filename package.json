@@ -1,7 +1,7 @@
-{
-  "name": "signup-prj-root",
-  "private": true,
-  "scripts": {
-    "build": "npm --prefix frontend install && npm --prefix frontend run build"
-  }
+﻿{
+    "name":  "signup-prj-root",
+    "private":  true,
+    "scripts":  {
+                    "build":  "npm --prefix frontend ci \u0026\u0026 npm --prefix frontend run build"
+                }
 }
