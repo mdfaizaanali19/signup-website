@@ -11,28 +11,60 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Parse database URL for proper SSL configuration
-const dbUrl = new URL(process.env.DATABASE_URL);
+let pool = null;
+let dbConfigError = null;
 
-// Database connection pool with SSL
-const pool = mysql.createPool({
-  host: dbUrl.hostname,
-  port: dbUrl.port,
-  user: dbUrl.username,
-  password: dbUrl.password,
-  database: dbUrl.pathname.slice(1),
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  ssl: {
-    rejectUnauthorized: false
-  },
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 10000
-});
+function initializePool() {
+  const databaseUrl = process.env.DATABASE_URL;
+
+  if (!databaseUrl) {
+    dbConfigError = 'DATABASE_URL is not set';
+    console.error('Database configuration error:', dbConfigError);
+    return;
+  }
+
+  try {
+    const dbUrl = new URL(databaseUrl);
+    pool = mysql.createPool({
+      host: dbUrl.hostname,
+      port: dbUrl.port || 3306,
+      user: dbUrl.username,
+      password: dbUrl.password,
+      database: dbUrl.pathname.slice(1),
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      ssl: {
+        rejectUnauthorized: false
+      },
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000
+    });
+  } catch (error) {
+    dbConfigError = `Invalid DATABASE_URL: ${error.message}`;
+    console.error('Database configuration error:', dbConfigError);
+  }
+}
+
+initializePool();
+
+function isDatabaseReady(res) {
+  if (!pool) {
+    res.status(500).json({
+      message: 'Database is not configured',
+      details: dbConfigError
+    });
+    return false;
+  }
+  return true;
+}
 
 // Initialize database table - auto creates if not exists
 async function initDB() {
+  if (!pool) {
+    return;
+  }
+
   try {
     const connection = await pool.getConnection();
     
@@ -60,6 +92,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 // Signup endpoint
 app.post('/api/auth/signup', async (req, res) => {
   try {
+    if (!isDatabaseReady(res)) return;
+
     const { username, email, password } = req.body;
 
     if (!username || !email || !password) {
@@ -110,6 +144,8 @@ app.post('/api/auth/signup', async (req, res) => {
 // Login endpoint
 app.post('/api/auth/login', async (req, res) => {
   try {
+    if (!isDatabaseReady(res)) return;
+
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -156,6 +192,8 @@ app.post('/api/auth/login', async (req, res) => {
 // Protected route - get current user
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
+    if (!isDatabaseReady(res)) return;
+
     const [users] = await pool.query(
       'SELECT id, username, email, created_at FROM users WHERE id = ?',
       [req.user.userId]
@@ -208,6 +246,8 @@ app.get('/', (req, res) => {
 // Get all users (for viewing database contents)
 app.get('/api/users', async (req, res) => {
   try {
+    if (!isDatabaseReady(res)) return;
+
     const [users] = await pool.query(
       'SELECT id, username, email, created_at FROM users ORDER BY created_at DESC'
     );
@@ -223,7 +263,11 @@ app.get('/api/users', async (req, res) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'OK',
+    databaseConfigured: Boolean(pool),
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Start server
