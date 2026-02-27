@@ -231,3 +231,6 @@ app.listen(PORT, async () => {
   await initDB();
   console.log(`Server running on port ${PORT}`);
 });
+
+
+module.exports = app;
