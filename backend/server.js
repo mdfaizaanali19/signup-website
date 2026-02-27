@@ -227,10 +227,16 @@ app.get('/api/health', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, async () => {
-  await initDB();
-  console.log(`Server running on port ${PORT}`);
-});
+// Start server (only if not running on Vercel)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, async () => {
+    await initDB();
+    console.log(`Server running on port ${PORT}`);
+  });
+} else {
+  // For Vercel, just initialize DB
+  initDB().catch(console.error);
+}
 
 
 module.exports = app;
